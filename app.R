@@ -25,11 +25,21 @@ library(viridis)
 library(waffle)
 
 # Data
-annual_state_electricity <- read_excel("../annual_generation_state-2.xls", skip = 2)
+annual_state_electricity <- read_excel("electricity_data.xls", skip = 2)
 
 #make as tibble, tidy
 annual_state_electricity <- as.tbl(annual_state_electricity)
 annual_state_electricity <- annual_state_electricity %>% mutate(Source = recode(Source, 'Wood and Wood Derived Fuels'='Wood')) %>% mutate(Source = recode(Source, 'Hydroelectric Conventional'='Hydroelectric')) %>% mutate(Source = recode(Source, 'Solar Thermal and Photovoltaic'='Solar Thermal and PV')) 
+
+annual_state_electricity <- annual_state_electricity %>% #group_by(Year) %>% group_by(State) %>% 
+  mutate(Source = recode(Source, "Other Biomass" = "Other")) %>% 
+  mutate(Source = recode(Source, "Wood Derived Fuels" = "Other")) %>%
+  mutate(Source = recode(Source, "Geothermal" = "Other")) %>%
+  mutate(Source = recode(Source, "Pumpted Storage" = "Other")) %>%
+  mutate(Source = recode(Source, "Other Gases" = "Other")) 
+
+annual_state_electricity <- aggregate(data = annual_state_electricity, Gen~Year+State+Source+Type,FUN=sum)
+
 
 # Only using total electric power industry
 total_industry <- filter(annual_state_electricity, Type == "Total Electric Power Industry") %>% select(-Type)
@@ -79,7 +89,7 @@ state_pop <-  as_tibble(getCensus(name="acs5",
 ################################################################################################################
 
 # Define UI for application that draws a histogram
-ui <- fluidPage(theme = shinytheme("yeti"),
+ui <- fluidPage(theme = shinytheme("paper"),
   
   # Application title
   titlePanel("Where Does Your Electricity Come From?"),
@@ -96,10 +106,6 @@ ui <- fluidPage(theme = shinytheme("yeti"),
                   value = 2017,
                   animate= animationOptions(interval = 600, loop = FALSE, playButton = NULL,
                        pauseButton = NULL)),
-      
-      checkboxInput(input = "regularvsclean",
-                  label = "Low-carbon sources only?",
-                  value = FALSE), 
       
       #checkbox
       checkboxInput(inputId = "show_data",
@@ -127,6 +133,10 @@ ui <- fluidPage(theme = shinytheme("yeti"),
       
       tabsetPanel(type = "tabs",
                   tabPanel("Largest Source of Energy",
+                           selectInput(input = "regularvsclean",
+                                       label = "Low-carbon sources only?",
+                                       choices = c("All sources" = "all", "Low-carbon only" = "lc"),
+                                       selected = "all"), 
                            leafletOutput("largestmap"),
                            imageOutput(outputId = "waffle"),
                            h2(textOutput("datayear1")),
@@ -136,7 +146,7 @@ ui <- fluidPage(theme = shinytheme("yeti"),
                   tabPanel("Electricity use per capita",
                            selectInput(inputId = "sources", label = "Electricity Source:", 
                                        choices = c("Coal", "Natural Gas", "Hydroelectric", "Nuclear", "Wind",
-                                                   "Solar Thermal and PV", "Petroleum", "Other Biomass",  "Wood")),
+                                                   "Solar Thermal and PV", "Petroleum", "Other Biomass")),
                           leafletOutput("percentmap"),
                            #leafletOutput("mymap"),
                           h2(textOutput("datayear")),
@@ -156,20 +166,23 @@ ui <- fluidPage(theme = shinytheme("yeti"),
 server <- function(input, output, session) {
   
   dy <- eventReactive(input$update_data_table, {paste0(input$year, ", ", input$sources)})
-  dy1 <- eventReactive(input$update_data_table, {input$year})
+  dy1 <- eventReactive(input$update_data_table, {paste0(input$year)})
   
   output$datayear <- renderText(dy())
-  output$datayear1 <- renderText(dy())
+  output$datayear1 <- renderText(dy1())
   
   states_year <- reactive({
     req(input$year)
-    total_industry %>% filter(Year == input$year) %>% filter(Source != "Total")
+    total_industry %>% filter(Year == input$year) %>% 
+      filter(Source != "Total" & !(name == "US-Total" | name == "DC"))
   })
   
   #gen_per_capita
   pcdata <- reactive({
     req(input$year)
-    total_industry %>% filter(Year == input$year & Source == "Total" & !(name == "US-Total" | name == "DC")) %>% left_join(state_pop, by = 'name') %>% 
+    total_industry %>% 
+      filter(Year == input$year & Source %in% c("Total", "Other Gases", "Pumped Storage", "Other") & !(name == "US-Total" | name == "District of Columbia")) %>% 
+      left_join(state_pop, by = 'name') %>% 
       mutate(plot_gen = Gen / pop) %>% 
       select(-state)
   })
@@ -181,7 +194,7 @@ server <- function(input, output, session) {
   
   percentdata <- reactive({
     req(input$year) 
-    total_industry %>% filter(Year == input$year & !(name == "US-Total" | name == "DC")) %>% 
+    total_industry %>% filter(Year == input$year & !(name == "US-Total" | name == "District of Columbia")) %>% 
       group_by(name) %>% mutate(tot = max(Gen)) %>% ungroup() %>% mutate(percent = (Gen / tot) * 100) %>% select(-tot)
   })
   
@@ -199,7 +212,7 @@ server <- function(input, output, session) {
   })
   
   largestdata_clean_checkbox <- reactive({
-    if(input$regularvsclean){states_year() %>% filter(Source %in% c("Hydroelectric","Nuclear","Wind","Solar Thermal and PV"))} else{states_year()}})
+    if(input$regularvsclean == "lc"){states_year() %>% filter(Source %in% c("Hydroelectric","Nuclear","Wind","Solar Thermal and PV"))} else{states_year()}})
   
   # join data
   
@@ -286,8 +299,14 @@ server <- function(input, output, session) {
                 position = "bottomright") 
   })
   
+  mycols <- c( "#000004FF", "#440154FF", "#482878FF",  "#26828EFF", "#20A486FF",
+               "#35B779FF", "#5DC863FF", "#8FD744FF", "#FDE725FF","#FDE725FF")
+  
+  #[1] "#440154FF" "#481F70FF" "#443A83FF" "#3B528BFF" "#31688EFF" "#287C8EFF" "#21908CFF" "#20A486FF" "#35B779FF" "#5DC863FF" "#8FD744FF"
+  #[12] "#C7E020FF" "#FDE725FF"
+  
   output$largestmap <- renderLeaflet({
-    pal <- colorFactor(viridis(7), domain = largest_states_joined()$Source)
+    pal <- colorFactor(mycols, domain = states_year()$Source)
     #pal <- colorNumeric("Greens", domain=states_joined()$plot_gen, bins=bins)
     #pal <- colorBin("Blues", domain=states_joined()$plot_gen, bins=bins)
     leaflet(largest_states_joined()) %>%
@@ -307,7 +326,7 @@ server <- function(input, output, session) {
                     bringToFront = TRUE),
                   label = largest_labels()) %>%
       addLegend(pal = pal, values = ~Source, opacity = 0.7, title = NULL,
-                position = "bottomright") 
+                position = "bottomright", labels =  ~states_year()$Source)
   })
   
   output$percentmap <- renderLeaflet({
@@ -331,7 +350,7 @@ server <- function(input, output, session) {
                     fillOpacity = 0.7,
                     bringToFront = TRUE),
                   label = percent_labels()) %>%
-      addLegend(pal = pal, values = ~density, opacity = 0.7, title = NULL,
+      addLegend(pal = pal, values = ~density, opacity = 0.7, title = "Percent",
                 position = "bottomright") 
   })
   
@@ -346,7 +365,7 @@ server <- function(input, output, session) {
   output$selected_state <- reactive({click$Id})
   
   waffle_state <- reactive({
-    filter(states_year(), State == click$Id, Source != "Total", Source != "Other Gases", Source != "Pumped Storage", Source != "Other Biomass", Source != "Other")
+    filter(states_year(), State == click$Id, Source != "Total", Source != "Other Gases", Source != "Pumped Storage", Source != "Other")
   })
   
   waffle_setup <- reactive({
