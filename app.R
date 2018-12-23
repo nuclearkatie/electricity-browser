@@ -11,8 +11,6 @@ library(dplyr)
 library(RColorBrewer)
 library(ggthemes)
 library(readxl)
-#library(urbnmapr) not made for use with shiny
-library(waffle)
 library(leaflet)
 library(maps)
 library(geojson)
@@ -22,7 +20,6 @@ library(DT)
 library(openintro)
 library(censusapi)
 library(viridis) 
-library(waffle)
 library(shinyWidgets)
 
 # Data
@@ -168,9 +165,9 @@ ui <- fluidPage(theme = shinytheme("paper"),
                                                      value = 2017,
                                                      animate= animationOptions(interval = 600, loop = FALSE, playButton = NULL,
                                                                                pauseButton = NULL)),
-                                         br(),
-                                         h2(textOutput("datayear1")),
-                                         DT::dataTableOutput(outputId = "largestdata")
+                                         br()#,
+                                         #h2(textOutput("datayear1")),
+                                         #DT::dataTableOutput(outputId = "largestdata")
                                 ),
                                 
                                 tabPanel(tags$b("Percent use by source"),
@@ -460,58 +457,58 @@ server <- function(input, output, session) {
   
   
   
-  pcdf <- eventReactive(input$update_data_table, {
-    req(input$year)
-    DT::datatable(data = data.frame(pc_states_joined()), 
-                  options = list(pageLength = 10), 
-                  rownames = FALSE)
-  })
+#  pcdf <- eventReactive(input$update_data_table, {
+#    req(input$year)
+#    DT::datatable(data = data.frame(pc_states_joined()), 
+#                  options = list(pageLength = 10), 
+#                  rownames = FALSE)
+#  })
   
-  output$pcdata <- DT::renderDataTable({
-    if(input$show_data){
-      pcdf()
-    }
-  })
-  
-  ####
-  
-  largest_states_table <- reactive({
-    largestdata() %>% select("name", "Source", "Gen") %>% rename("State" = "name", "Largest Source" = "Source", "Generation (MWh)" = "Gen")
-  })
-  
-  largestdf <- eventReactive(input$update_data_table, {
-    req(input$year)
-    DT::datatable(data = data.frame(largest_states_table()), 
-                  options = list(pageLength = 10), 
-                  rownames = FALSE)
-  })
-  
-  output$largestdata <- DT::renderDataTable({
-    if(input$show_data){
-      largestdf()
-    }
-  })
+#  output$pcdata <- DT::renderDataTable({
+#    if(input$show_data){
+#      pcdf()
+#    }
+#  })
   
   ####
   
-  dy <- eventReactive(input$update_data_table, {paste0(input$year, ", ", input$sources)})
-  dy1 <- eventReactive(input$update_data_table, {paste0(input$year)})
+#  largest_states_table <- reactive({
+#    largestdata() %>% select("name", "Source", "Gen") %>% rename("State" = "name", "Largest Source" = "Source", "Generation (MWh)" = "Gen")
+#  })
   
-  output$datayear <- renderText(dy())
-  output$datayear1 <- renderText(dy1())
+#  largestdf <- eventReactive(input$update_data_table, {
+#    req(input$year)
+#    DT::datatable(data = data.frame(largest_states_table()), 
+#                  options = list(pageLength = 10), 
+#                  rownames = FALSE)
+#  })
+  
+#  output$largestdata <- DT::renderDataTable({
+#    if(input$show_data){
+#      largestdf()
+#    }
+#  })
   
   ####
   
-  percent_table <- reactive({
-    source_percentdata() %>% select("name", "Gen") %>% rename("State" = "name", "Generation (MWh)" = "Gen")
-  })
+  #dy <- eventReactive(input$update_data_table, {paste0(input$year, ", ", input$sources)})
+  #dy1 <- eventReactive(input$update_data_table, {paste0(input$year)})
   
-  percentdf <- eventReactive(input$update_data_table, {
-    req(input$year)
-    DT::datatable(data = data.frame(percent_table()), 
-                  options = list(pageLength = 10), 
-                  rownames = FALSE)
-  })
+  #output$datayear <- renderText(dy())
+  #output$datayear1 <- renderText(dy1())
+  
+  ####
+  
+  #percent_table <- reactive({
+  #  source_percentdata() %>% select("name", "Gen") %>% rename("State" = "name", "Generation (MWh)" = "Gen")
+  #})
+  
+  #percentdf <- eventReactive(input$update_data_table, {
+  #  req(input$year)
+  #  DT::datatable(data = data.frame(percent_table()), 
+  #                options = list(pageLength = 10), 
+  #                rownames = FALSE)
+  #})
   
   output$percenttable <- DT::renderDataTable({
     if(input$show_data){
