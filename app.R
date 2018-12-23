@@ -449,7 +449,7 @@ server <- function(input, output, session) {
     pixelratio <- session$clientData$pixelratio
     width_scaled <- width * pixelratio
     #width_scaled <- if(width_scaled > 2000){width_scaled * 0.17} 
-    list(src = normalizePath(file.path('ironed_out', paste0(input$chooseastate,'_waffle.png'))), 
+    list(src = normalizePath(file.path('images', paste0(input$chooseastate,'_waffle.png'))), 
          width= width_scaled, 
          alt = paste0("waffle"))
   }, deleteFile = FALSE)
